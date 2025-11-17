@@ -1,0 +1,74 @@
+{
+  "Comment": "Local PoC: Callback Pattern with Task Tokens",
+  "StartAt": "CreateJobAndWait",
+  "States": {
+    "CreateJobAndWait": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:000000000000:function:poc-create-job",
+        "Payload": {
+          "record": {
+            "id": "test-001",
+            "data": {
+              "name": "Local PoC Test",
+              "timestamp.$": "$$.Execution.StartTime"
+            }
+          },
+          "taskToken.$": "$$.Task.Token",
+          "executionId.$": "$$.Execution.Id",
+          "pollingConfig": {
+            "intervalMinutes": 1,
+            "maxAttempts": 10,
+            "timeoutMinutes": 15
+          }
+        }
+      },
+      "TimeoutSeconds": 900,
+      "ResultPath": "$.jobResult",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.Timeout"],
+          "ResultPath": "$.error",
+          "Next": "TimeoutState"
+        },
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "ResultPath": "$.error",
+          "Next": "FailedState"
+        }
+      ],
+      "Next": "SuccessState"
+    },
+
+    "SuccessState": {
+      "Type": "Pass",
+      "Parameters": {
+        "status": "SUCCESS",
+        "message": "🎉 Workflow completed successfully!",
+        "result.$": "$.jobResult"
+      },
+      "End": true
+    },
+
+    "TimeoutState": {
+      "Type": "Pass",
+      "Parameters": {
+        "status": "TIMEOUT",
+        "message": "⏰ Workflow timed out",
+        "error.$": "$.error"
+      },
+      "End": true
+    },
+
+    "FailedState": {
+      "Type": "Pass",
+      "Parameters": {
+        "status": "FAILED",
+        "message": "❌ Job processing failed",
+        "error.$": "$.error"
+      },
+      "End": true
+    }
+  }
+}

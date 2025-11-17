@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  localstack:
+    image: localstack/localstack:3.0
+    container_name: localstack-poc
+    ports:
+      - "4566:4566"             # LocalStack Gateway
+      - "4510-4559:4510-4559"   # External services port range
+    environment:
+      - SERVICES=stepfunctions,lambda,dynamodb,iam,logs,events
+      - DEBUG=1
+      - LAMBDA_EXECUTOR=docker
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - LOCALSTACK_HOST=localhost
+      - EAGER_SERVICE_LOADING=1
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./localstack:/etc/localstack/init/ready.d"
+      - "./lambdas:/opt/lambdas"
+    networks:
+      - localstack-net
+
+networks:
+  localstack-net:
+    driver: bridge

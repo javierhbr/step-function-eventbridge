@@ -1,0 +1,22 @@
+{
+  "name": "poc-poller",
+  "version": "1.0.0",
+  "description": "Polls job status and reconnects Step Functions workflow via Task Token",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist *.zip",
+    "package": "npm run build && cd dist && zip -r ../poller.zip .",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.500.0",
+    "@aws-sdk/client-sfn": "^3.500.0",
+    "@aws-sdk/client-lambda": "^3.500.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/aws-lambda": "^8.10.134",
+    "typescript": "^5.3.3"
+  }
+}
