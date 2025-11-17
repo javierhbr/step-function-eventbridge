@@ -13,7 +13,9 @@ This PoC validates an 87% cost reduction in workflow orchestration by using the 
 
 - **Docker** (20.10+) and **Docker Compose** (2.0+)
 - **Node.js** (18+) and **npm**
-- **AWS CLI** (for LocalStack interaction)
+- **AWS CLI** v2 (required for LocalStack interaction)
+  - Install on macOS: `brew install awscli`
+  - Or install awslocal: `pip install awscli-local`
 - **jq** (optional, for JSON formatting)
 
 ## Quick Start
@@ -240,25 +242,49 @@ Poll specific job:
 
 ## Monitoring
 
+### Comprehensive Resource Monitor
+
+View all resources at once with detailed information:
+
+```bash
+# Run once and exit
+./scripts/monitor.sh
+
+# Watch mode - refresh every 5 seconds (default)
+./scripts/monitor.sh --watch
+
+# Watch mode - refresh every 10 seconds
+./scripts/monitor.sh --watch 10
+
+# Show help
+./scripts/monitor.sh --help
+```
+
+This displays:
+- **DynamoDB Tables**: Task tokens and jobs with item counts and all data
+- **Lambda Functions**: All 3 functions with runtime, state, timeout, memory, code size
+- **Step Functions**: State machine status, recent executions, latest execution details with input/output
+- **Execution History**: Recent events from the latest execution
+- **Summary**: Quick overview of all resources
+
+**Watch mode** continuously refreshes the display, perfect for monitoring active workflows in real-time. Press Ctrl+C to exit.
+
 ### View Lambda Logs
 
 ```bash
 docker logs localstack-poc -f
 ```
 
-### Check DynamoDB Tables
+### Check Specific Resources
 
 ```bash
-# Task tokens
+# Task tokens table
 aws --endpoint-url=http://localhost:4566 dynamodb scan --table-name poc-task-tokens
 
-# Jobs
+# Jobs table
 aws --endpoint-url=http://localhost:4566 dynamodb scan --table-name poc-jobs
-```
 
-### View Executions
-
-```bash
+# Executions
 aws --endpoint-url=http://localhost:4566 stepfunctions list-executions \
   --state-machine-arn arn:aws:states:us-east-1:000000000000:stateMachine:poc-callback-workflow
 ```
@@ -363,6 +389,33 @@ npm run build
 ```
 
 ### Test fails
+
+**Lambda functions not ready:**
+LocalStack creates Lambda functions asynchronously (like AWS). Wait 30+ seconds after deployment before running tests.
+
+```bash
+# Wait for function to be active
+aws --endpoint-url=http://localhost:4566 lambda wait function-active-v2 \
+  --function-name poc-create-job
+
+# Or wait manually
+sleep 30
+```
+
+**Test reports "No job found":**
+The test script now includes automatic retries (up to 10 seconds) to handle Lambda execution timing. If you still see this error:
+
+```bash
+# Check if Lambda executed successfully
+aws --endpoint-url=http://localhost:4566 stepfunctions get-execution-history \
+  --execution-arn <execution-arn> \
+  --query 'events[?type==`TaskSubmitted`]'
+
+# View recent Lambda logs
+docker logs localstack-poc 2>&1 | tail -50
+```
+
+**Other issues:**
 ```bash
 # Check LocalStack health
 curl http://localhost:4566/health

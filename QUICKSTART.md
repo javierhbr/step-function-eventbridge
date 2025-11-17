@@ -16,6 +16,19 @@ docker --version
 
 # Check Docker Compose
 docker-compose --version
+
+# Check AWS CLI
+aws --version
+```
+
+**If AWS CLI is missing, install it:**
+
+```bash
+# macOS (Homebrew)
+brew install awscli
+
+# Or install awslocal (LocalStack-specific)
+pip install awscli-local
 ```
 
 ## Step 1: Install Dependencies (2 minutes)
@@ -46,7 +59,7 @@ docker ps | grep localstack-poc
 docker logs localstack-poc -f
 ```
 
-## Step 3: Deploy Everything (1 minute)
+## Step 3: Deploy Everything (1-2 minutes)
 
 ```bash
 ./scripts/deploy-local.sh
@@ -57,7 +70,8 @@ This script:
 2. Compiles TypeScript to JavaScript
 3. Packages Lambda functions with dependencies
 4. Deploys all 3 Lambda functions
-5. Creates Step Functions state machine
+5. **Waits for Lambda functions to become active** (~30 seconds)
+6. Creates Step Functions state machine
 
 Expected output:
 ```
@@ -66,9 +80,17 @@ Expected output:
 📦 Creating DynamoDB tables...
 🔨 Building and packaging TypeScript Lambda functions...
 🚀 Deploying Lambda functions to LocalStack...
+⏳ Waiting for Lambda functions to become active...
+   (LocalStack creates functions asynchronously like AWS)
+   - Waiting for poc-simulated-api...
+   - Waiting for poc-create-job...
+   - Waiting for poc-poller...
+✅ All Lambda functions are active
 🔧 Creating Step Functions state machine...
 🎉 Deployment Complete!
 ```
+
+**Note:** LocalStack creates Lambda functions asynchronously (like AWS), so there's a ~30 second wait for functions to become active.
 
 ## Step 4: Run Test (1 minute)
 
@@ -194,7 +216,9 @@ This is normal on re-deploy - the script handles it automatically.
 | `docker-compose up -d` | Start LocalStack |
 | `./scripts/deploy-local.sh` | Deploy all resources |
 | `./scripts/test-local.sh` | Run end-to-end test |
-| `./scripts/monitor.sh` | View all resources |
+| `./scripts/monitor.sh` | View all resources (one-time) |
+| `./scripts/monitor.sh --watch` | Monitor resources continuously (5s refresh) |
+| `./scripts/monitor.sh --watch 10` | Monitor with custom interval (10s) |
 | `./scripts/poll-manually.sh <job-id>` | Manual poll trigger |
 | `./scripts/cleanup.sh` | Remove resources |
 | `docker-compose down -v` | Stop and remove everything |

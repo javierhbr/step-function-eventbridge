@@ -7,15 +7,30 @@ REGION="us-east-1"
 echo "🚀 Deploying TypeScript PoC to LocalStack"
 echo "=========================================="
 
+# Check for AWS CLI
+echo ""
+echo "Checking prerequisites..."
+if ! command -v aws &> /dev/null; then
+  echo "❌ AWS CLI is not installed."
+  echo ""
+  echo "Install options:"
+  echo "  1. Homebrew: brew install awscli"
+  echo "  2. Direct: curl 'https://awscli.amazonaws.com/AWSCLIV2.pkg' -o 'AWSCLIV2.pkg' && sudo installer -pkg AWSCLIV2.pkg -target /"
+  echo "  3. LocalStack CLI: pip install awscli-local (then use 'awslocal' instead of 'aws')"
+  exit 1
+fi
+echo "✅ AWS CLI found: $(aws --version | head -1)"
+
 # Check LocalStack is running
 echo ""
 echo "Checking LocalStack status..."
-if ! curl -s $ENDPOINT/health | grep -q "running"; then
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $ENDPOINT/health 2>/dev/null || echo "000")
+if [ "$HTTP_STATUS" != "200" ]; then
   echo "❌ LocalStack is not running. Start it with: docker-compose up -d"
   exit 1
 fi
 
-echo "✅ LocalStack is running"
+echo "✅ LocalStack is running (HTTP $HTTP_STATUS)"
 
 # Configure AWS CLI for LocalStack
 export AWS_ACCESS_KEY_ID=test
@@ -139,6 +154,20 @@ aws --endpoint-url=$ENDPOINT lambda update-function-code \
   --no-cli-pager
 
 echo "  ✅ poc-poller deployed"
+
+echo ""
+echo "⏳ Waiting for Lambda functions to become active..."
+echo "   (LocalStack creates functions asynchronously like AWS)"
+
+# Wait for each function to become active
+for func in poc-simulated-api poc-create-job poc-poller; do
+  echo "   - Waiting for $func..."
+  aws --endpoint-url=$ENDPOINT lambda wait function-active-v2 \
+    --function-name $func \
+    2>/dev/null || sleep 5
+done
+
+echo "✅ All Lambda functions are active"
 
 echo ""
 echo "🔧 Creating Step Functions state machine..."

@@ -8,22 +8,46 @@ echo "================================================="
 echo ""
 echo "Checking prerequisites..."
 
+MISSING_PREREQS=0
+
 if ! command -v node &> /dev/null; then
-  echo "❌ Node.js is not installed. Please install Node.js 18+ first."
-  exit 1
+  echo "❌ Node.js is not installed (required: 18+)"
+  MISSING_PREREQS=1
+else
+  echo "✅ Node.js found: $(node --version)"
 fi
 
 if ! command -v npm &> /dev/null; then
-  echo "❌ npm is not installed. Please install npm first."
-  exit 1
+  echo "❌ npm is not installed"
+  MISSING_PREREQS=1
+else
+  echo "✅ npm found: $(npm --version)"
 fi
 
 if ! command -v docker &> /dev/null; then
-  echo "❌ Docker is not installed. Please install Docker first."
+  echo "❌ Docker is not installed"
+  MISSING_PREREQS=1
+else
+  echo "✅ Docker found: $(docker --version | head -1)"
+fi
+
+if ! command -v aws &> /dev/null; then
+  echo "❌ AWS CLI is not installed"
+  echo "   Install: brew install awscli"
+  echo "   Or: pip install awscli-local"
+  MISSING_PREREQS=1
+else
+  echo "✅ AWS CLI found: $(aws --version | head -1)"
+fi
+
+if [ $MISSING_PREREQS -eq 1 ]; then
+  echo ""
+  echo "Please install missing prerequisites and run setup again."
   exit 1
 fi
 
-echo "✅ All prerequisites met"
+echo ""
+echo "✅ All prerequisites met!"
 
 # Create directories if they don't exist
 echo ""

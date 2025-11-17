@@ -24,23 +24,36 @@ EXECUTION_ARN=$(aws --endpoint-url=$ENDPOINT stepfunctions start-execution \
 echo "   ✅ Execution started: $EXECUTION_ARN"
 echo ""
 
-# Wait for job to be created
-echo "   ⏳ Waiting for job creation (3 seconds)..."
-sleep 3
-
-# Get job ID from DynamoDB
+# Wait for job to be created with retry loop
 echo ""
 echo "2️⃣  Checking job created in DynamoDB..."
-JOB_ID=$(aws --endpoint-url=$ENDPOINT dynamodb scan \
-  --table-name poc-task-tokens \
-  --filter-expression "#s = :polling" \
-  --expression-attribute-names '{"#s": "status"}' \
-  --expression-attribute-values '{":polling": {"S": "POLLING"}}' \
-  --query 'Items[0].jobId.S' \
-  --output text)
+echo "   ⏳ Waiting for job creation (up to 10 seconds)..."
+
+JOB_ID=""
+RETRY_COUNT=0
+MAX_RETRIES=5
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  JOB_ID=$(aws --endpoint-url=$ENDPOINT dynamodb scan \
+    --table-name poc-task-tokens \
+    --filter-expression "#s = :polling" \
+    --expression-attribute-names '{"#s": "status"}' \
+    --expression-attribute-values '{":polling": {"S": "POLLING"}}' \
+    --query 'Items[0].jobId.S' \
+    --output text)
+
+  if [ "$JOB_ID" != "None" ] && [ -n "$JOB_ID" ]; then
+    break
+  fi
+
+  RETRY_COUNT=$((RETRY_COUNT + 1))
+  if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+    sleep 2
+  fi
+done
 
 if [ "$JOB_ID" == "None" ] || [ -z "$JOB_ID" ]; then
-  echo "   ❌ No job found. Check Lambda logs:"
+  echo "   ❌ No job found after 10 seconds. Check Lambda logs:"
   echo "      docker logs localstack-poc 2>&1 | grep -A 20 'CreateJob'"
   exit 1
 fi
