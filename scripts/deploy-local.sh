@@ -59,6 +59,41 @@ aws --endpoint-url=$ENDPOINT dynamodb create-table \
 echo "✅ DynamoDB tables ready"
 
 echo ""
+echo "📦 Creating S3 bucket for file uploads..."
+aws --endpoint-url=$ENDPOINT s3 mb s3://poc-file-uploads 2>/dev/null || \
+  echo "  Bucket poc-file-uploads already exists"
+
+# Configure CORS (critical for presigned URLs)
+cat > /tmp/s3-cors.json <<EOF
+{
+  "CORSRules": [{
+    "AllowedOrigins": ["*"],
+    "AllowedMethods": ["PUT", "POST", "GET"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3000
+  }]
+}
+EOF
+
+aws --endpoint-url=$ENDPOINT s3api put-bucket-cors \
+  --bucket poc-file-uploads \
+  --cors-configuration file:///tmp/s3-cors.json
+
+echo "✅ S3 bucket ready with CORS configured"
+
+echo ""
+echo "📦 Creating DynamoDB table for file uploads..."
+aws --endpoint-url=$ENDPOINT dynamodb create-table \
+  --table-name poc-file-uploads \
+  --attribute-definitions AttributeName=uploadId,AttributeType=S \
+  --key-schema AttributeName=uploadId,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --no-cli-pager 2>/dev/null || echo "  Table poc-file-uploads already exists"
+
+echo "✅ DynamoDB table for file uploads ready"
+
+echo ""
 echo "🔨 Building and packaging TypeScript Lambda functions..."
 
 for lambda_dir in lambdas/*/; do
