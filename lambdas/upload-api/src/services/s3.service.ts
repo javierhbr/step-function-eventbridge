@@ -15,7 +15,11 @@ const config: AWSConfig = {
   forcePathStyle: true  // CRITICAL for LocalStack S3 presigned URLs
 };
 
-const s3Client = new S3Client(config);
+const s3Client = new S3Client({
+  ...config,
+  // Disable request checksums for LocalStack compatibility
+  requestChecksumCalculation: 'WHEN_REQUIRED'
+});
 const BUCKET_NAME = process.env.S3_BUCKET || 'poc-file-uploads';
 const PRESIGNED_URL_EXPIRY = 15 * 60; // 15 minutes in seconds
 

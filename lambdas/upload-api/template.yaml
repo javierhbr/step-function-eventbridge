@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: File Upload API with S3 Presigned URLs
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: nodejs18.x
+    Environment:
+      Variables:
+        S3_BUCKET: poc-file-uploads
+        TABLE_NAME: poc-file-uploads
+        # LocalStack configuration (override in production)
+        AWS_ENDPOINT_URL: http://host.docker.internal:4566
+        LOCALSTACK_HOSTNAME: host.docker.internal
+
+Resources:
+  UploadApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: index.handler
+      Description: File upload API with Fastify
+      Events:
+        HealthCheck:
+          Type: Api
+          Properties:
+            Path: /health
+            Method: GET
+        InitiateUpload:
+          Type: Api
+          Properties:
+            Path: /initiate
+            Method: POST
+        UploadStatus:
+          Type: Api
+          Properties:
+            Path: /status/{uploadId}
+            Method: GET
+        Options:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: OPTIONS
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: poc-file-uploads
+        - S3CrudPolicy:
+            BucketName: poc-file-uploads
+
+  # DynamoDB Table
+  FileUploadsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: poc-file-uploads
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: uploadId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: uploadId
+          KeyType: HASH
+
+  # S3 Bucket
+  FileUploadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: poc-file-uploads
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - PUT
+              - POST
+              - GET
+            AllowedHeaders:
+              - '*'
+            ExposedHeaders:
+              - ETag
+            MaxAge: 3000
+
+Outputs:
+  UploadApiUrl:
+    Description: "API Gateway endpoint URL for Upload API"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+
+  UploadApiFunctionArn:
+    Description: "Upload API Lambda Function ARN"
+    Value: !GetAtt UploadApiFunction.Arn
+
+  FileUploadsBucket:
+    Description: "S3 Bucket for file uploads"
+    Value: !Ref FileUploadsBucket
+
+  FileUploadsTable:
+    Description: "DynamoDB table for upload metadata"
+    Value: !Ref FileUploadsTable

@@ -1,22 +1,30 @@
 {
   "name": "poc-upload-api",
   "version": "1.0.0",
-  "description": "File upload API with S3 presigned URLs",
+  "description": "File upload API with S3 presigned URLs powered by Fastify",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist *.zip",
     "package": "npm run build && cd dist && zip -r ../upload-api.zip .",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "dev": "tsx src/server.ts",
+    "dev:watch": "tsx watch src/server.ts",
+    "sam:build": "sam build",
+    "sam:start": "sam local start-api --port 3000",
+    "sam:invoke": "sam local invoke UploadApiFunction"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.500.0",
     "@aws-sdk/client-s3": "^3.500.0",
-    "@aws-sdk/s3-request-presigner": "^3.500.0"
+    "@aws-sdk/s3-request-presigner": "^3.500.0",
+    "fastify": "^4.25.0",
+    "@fastify/aws-lambda": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/aws-lambda": "^8.10.134",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "tsx": "^4.7.0"
   }
 }

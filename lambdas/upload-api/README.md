@@ -1,16 +1,25 @@
 # File Upload System with S3 Presigned URLs
 
-A complete serverless file upload system using AWS Lambda, S3, and DynamoDB, running on LocalStack for local development and testing.
+A complete serverless file upload system using **Fastify**, AWS Lambda, S3, and DynamoDB, running on LocalStack for local development and testing.
 
 ## Architecture Overview
 
 This system implements a production-ready file upload pattern using S3 presigned URLs to bypass Lambda's 6MB payload limit, supporting files up to 100MB.
 
+**Built with Fastify** - The upload-api Lambda uses Fastify web framework and can run in three modes:
+1. **Standalone Fastify Server** - Fast local development (~1s startup)
+2. **AWS SAM Local** - Lambda + API Gateway simulation
+3. **Lambda Deployment** - LocalStack/AWS production
+
+See **[DEVELOPMENT.md](DEVELOPMENT.md)** for detailed development guide covering all three run modes.
+
 ### Components
 
-1. **upload-api Lambda** - REST API with Lambda Function URL
+1. **upload-api Lambda** - REST API powered by Fastify
+   - GET /health - Health check endpoint
    - POST /initiate - Generate presigned S3 URL
    - GET /status/:uploadId - Check upload status (returns HTTP 201 when completed)
+   - Supports Lambda Function URL and API Gateway
 
 2. **upload-complete Lambda** - S3 event handler
    - Triggered when file lands in S3
@@ -27,19 +36,21 @@ This system implements a production-ready file upload pattern using S3 presigned
 
 ```
 lambdas/
-├── upload-api/                    # REST API Lambda
-│   ├── package.json
-│   ├── tsconfig.json
+├── upload-api/                    # REST API Lambda (Fastify)
+│   ├── package.json               # Dependencies & npm scripts
+│   ├── tsconfig.json             # TypeScript configuration
+│   ├── template.yaml             # SAM/CloudFormation template
+│   ├── README.md                 # This file
+│   ├── DEVELOPMENT.md            # Detailed development guide
 │   ├── src/
-│   │   ├── index.ts              # Main handler with path routing
+│   │   ├── app.ts                # Fastify application (shared)
+│   │   ├── server.ts             # Standalone server entry point
+│   │   ├── index.ts              # Lambda handler (uses @fastify/aws-lambda)
 │   │   ├── types.ts              # TypeScript interfaces
-│   │   ├── handlers/
-│   │   │   ├── initiate.ts       # POST /initiate
-│   │   │   └── status.ts         # GET /status/:id
 │   │   └── services/
 │   │       ├── s3.service.ts     # Presigned URL generation
 │   │       └── db.service.ts     # DynamoDB operations
-│   └── dist/                     # Build output
+│   └── dist/                     # Build output (gitignored)
 └── upload-complete/               # S3 event handler Lambda
     ├── package.json
     ├── tsconfig.json
@@ -48,7 +59,7 @@ lambdas/
     └── dist/                     # Build output
 
 scripts/
-├── deploy-upload.sh              # Deploy upload system
+├── deploy-upload.sh              # Deploy upload system to LocalStack
 ├── test-upload.sh                # End-to-end tests
 └── cleanup-upload.sh             # Remove all resources
 ```
@@ -78,6 +89,18 @@ scripts/
 ```
 
 ## API Endpoints
+
+### GET /health
+
+Health check endpoint for monitoring.
+
+**Response (200 OK):**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-12-04T17:24:21.798Z"
+}
+```
 
 ### POST /initiate
 
@@ -204,45 +227,101 @@ interface FileUploadRecord {
 
 ## Development
 
+> 📖 **See [DEVELOPMENT.md](DEVELOPMENT.md)** for comprehensive development guide covering all three run modes, debugging, and best practices.
+
 ### Prerequisites
 
 - Node.js 18+
 - Docker Desktop
 - AWS CLI
 - TypeScript
+- AWS SAM CLI (optional, for SAM local mode)
+
+### Quick Start - Standalone Development Mode
+
+The fastest way to develop locally is using the standalone Fastify server:
+
+```bash
+# Install dependencies
+cd lambdas/upload-api
+npm install
+
+# Start standalone server (runs TypeScript directly with tsx)
+npm run dev
+
+# Or with auto-reload on file changes
+npm run dev:watch
+```
+
+Server will be available at **http://localhost:3000**
+
+**Test the API:**
+```bash
+# Health check
+curl http://localhost:3000/health
+
+# Initiate upload
+curl -X POST http://localhost:3000/initiate \
+  -H "Content-Type: application/json" \
+  -d '{"filename":"test.mp4","size":10485760,"contentType":"video/mp4"}'
+
+# Check status
+curl http://localhost:3000/status/UPLOAD_ID
+```
+
+### Three Development Modes
+
+**1. Standalone Fastify Server** (Recommended for Development)
+- ⚡ Fast startup (~1 second)
+- 🔄 Hot reload with `npm run dev:watch`
+- 🐛 Easy debugging
+- 📝 Full logging with Fastify logger
+- **Run:** `npm run dev`
+
+**2. AWS SAM Local** (Lambda Testing)
+- 🐳 Real Lambda environment (Docker containers)
+- 🌐 API Gateway simulation
+- 🔐 IAM policy testing
+- **Run:** `npm run sam:build && npm run sam:start`
+
+**3. LocalStack Deployment** (Integration Testing)
+- ☁️ Full AWS stack simulation
+- 🔗 S3 event triggers
+- 📊 DynamoDB integration
+- **Run:** `./scripts/deploy-upload.sh` (from project root)
+
+### Available Scripts (upload-api)
+
+```bash
+# Development (uses tsx to run TypeScript directly)
+npm run dev          # Start standalone Fastify server
+npm run dev:watch    # Auto-reload on file changes (recommended!)
+
+# Building
+npm run build        # Compile TypeScript to JavaScript
+npm run clean        # Remove dist/ and *.zip files
+npm run package      # Build and create ZIP for deployment
+npm run watch        # TypeScript watch mode
+
+# SAM Local
+npm run sam:build    # Build with SAM
+npm run sam:start    # Start SAM local API Gateway (port 3000)
+npm run sam:invoke   # Invoke Lambda function directly
+```
+
+**Note:** The `dev` and `dev:watch` scripts use `tsx` to run TypeScript files directly without pre-compilation for faster development iteration.
 
 ### Install Dependencies
 
 ```bash
-# Upload API Lambda
+# Upload API Lambda (includes Fastify, @fastify/aws-lambda, tsx)
 cd lambdas/upload-api
 npm install
 
 # Upload Complete Lambda
-cd lambdas/upload-complete
+cd ../upload-complete
 npm install
 ```
-
-### Build
-
-```bash
-# Build upload-api
-cd lambdas/upload-api
-npm run build
-
-# Build upload-complete
-cd lambdas/upload-complete
-npm run build
-```
-
-### Available Scripts
-
-Each Lambda has these npm scripts:
-
-- `npm run build` - Compile TypeScript to JavaScript
-- `npm run clean` - Remove dist/ and *.zip files
-- `npm run package` - Build and create ZIP for deployment
-- `npm run watch` - Watch mode for development
 
 ## Deployment
 
@@ -329,35 +408,83 @@ This removes:
 - DynamoDB table
 - Local build artifacts
 
+## Fastify Architecture
+
+The upload-api uses **Fastify** web framework with a unique architecture that allows the same code to run in multiple environments:
+
+```
+┌─────────────────────────────────────────────────┐
+│           src/app.ts                            │
+│     (Fastify application code)                  │
+│  ┌─────────────────────────────────┐            │
+│  │ Routes:                         │            │
+│  │  GET  /health                   │            │
+│  │  POST /initiate                 │            │
+│  │  GET  /status/:uploadId         │            │
+│  └─────────────────────────────────┘            │
+└────────────┬────────────────────┬────────────────┘
+             │                    │
+    ┌────────▼─────────┐   ┌──────▼──────────┐
+    │  src/server.ts   │   │  src/index.ts   │
+    │ (Standalone)     │   │ (Lambda)        │
+    └──────────────────┘   └──────┬──────────┘
+                                   │
+                          @fastify/aws-lambda
+                                   │
+                          AWS Lambda Runtime
+```
+
+**Key Components:**
+- **[src/app.ts](src/app.ts)** - Core Fastify application with all routes and middleware (framework-agnostic)
+- **[src/server.ts](src/server.ts)** - Standalone server entry point for local development
+- **[src/index.ts](src/index.ts)** - Lambda handler using `@fastify/aws-lambda` adapter
+- **[template.yaml](template.yaml)** - SAM/CloudFormation template for Lambda deployment
+
+This architecture provides maximum flexibility: develop fast with the standalone server, test with SAM local, and deploy to Lambda seamlessly.
+
 ## Key Features
 
-### 1. **Large File Support**
+### 1. **Fastify-Powered Performance**
+- ⚡ Fast startup and low overhead
+- 🔄 Run as standalone server OR Lambda
+- 🎯 Same code, multiple deployment targets
+- 📝 Built-in structured logging
+- 🔌 Extensive plugin ecosystem
+
+### 2. **Large File Support**
 - Bypasses Lambda 6MB payload limit
 - Supports files up to 100MB (configurable)
 - Uses S3 presigned URLs for direct upload
+- No API Gateway timeout issues
 
-### 2. **Production-Ready Patterns**
+### 3. **Production-Ready Patterns**
 - Type-safe TypeScript implementation
-- Comprehensive error handling
-- Structured logging
+- Comprehensive error handling with custom error classes
+- Structured logging with Fastify logger
 - Idempotent operations
+- CORS enabled for browser uploads
 
-### 3. **LocalStack Compatible**
+### 4. **LocalStack Compatible**
 - Full local development environment
 - No AWS account required for testing
+- S3 checksum compatibility fixes included
 - Identical to production AWS behavior
 
-### 4. **RESTful API Design**
-- Clear HTTP status codes
-- HTTP 201 Created for completed uploads
+### 5. **RESTful API Design**
+- Clear HTTP status codes (200 PENDING, 201 COMPLETED)
 - Standard error responses
+- Health check endpoint for monitoring
+- Path parameter routing (/status/:uploadId)
 
-### 5. **Event-Driven Architecture**
+### 6. **Event-Driven Architecture**
 - S3 triggers Lambda automatically
 - Decoupled components
 - Scalable design
+- Asynchronous upload completion
 
 ## AWS SDK Configuration
+
+### LocalStack Configuration
 
 All Lambdas use consistent LocalStack configuration:
 
@@ -371,9 +498,23 @@ const config = {
     accessKeyId: 'test',
     secretAccessKey: 'test'
   },
-  forcePathStyle: true  // CRITICAL for LocalStack S3
+  forcePathStyle: true  // CRITICAL for LocalStack S3 presigned URLs
 };
 ```
+
+### S3 Client Configuration (LocalStack Compatibility)
+
+To avoid checksum validation issues with LocalStack, the S3 client disables automatic checksums:
+
+```typescript
+const s3Client = new S3Client({
+  ...config,
+  // Disable request checksums for LocalStack compatibility
+  requestChecksumCalculation: 'WHEN_REQUIRED'
+});
+```
+
+This prevents the AWS SDK from adding `x-amz-checksum-crc32` headers to presigned URLs, which LocalStack doesn't support properly. For production AWS, this configuration works fine as checksums are still calculated when required by the service.
 
 ## Error Handling
 
@@ -468,40 +609,121 @@ npm install
 npm run build
 ```
 
+### Issue: "Cannot find module" when running npm run dev
+
+Make sure `tsx` is installed as a dev dependency:
+```bash
+npm install --save-dev tsx
+```
+
+The `tsx` package allows running TypeScript files directly without pre-compilation, which is used by `npm run dev` for fast development.
+
+### Issue: Port 3000 already in use
+
+Kill the process using port 3000:
+```bash
+lsof -ti:3000 | xargs kill -9
+
+# Or use a different port
+PORT=3001 npm run dev
+```
+
 ### Issue: LocalStack not responding
 
 ```bash
 docker-compose down
 docker-compose up -d
 # Wait 30 seconds for LocalStack to fully start
-curl http://localhost:4566/health
+curl http://localhost:4566/_localstack/health
 ```
 
-### Issue: Presigned URL upload fails
+### Issue: Presigned URL upload fails with checksum error
 
-Check CORS configuration:
+The S3 service is configured with `requestChecksumCalculation: 'WHEN_REQUIRED'` to avoid LocalStack checksum validation issues. If you still see checksum errors:
+
+1. Verify the S3 client configuration in [src/services/s3.service.ts](src/services/s3.service.ts)
+2. Check CORS configuration:
 ```bash
 aws --endpoint-url=http://localhost:4566 s3api get-bucket-cors \
   --bucket poc-file-uploads
 ```
 
-### Issue: S3 event not triggering Lambda
+### Issue: S3 event not triggering upload-complete Lambda
 
-Verify event notification:
+Verify event notification configuration:
 ```bash
 aws --endpoint-url=http://localhost:4566 s3api get-bucket-notification-configuration \
   --bucket poc-file-uploads
 ```
+
+Check LocalStack logs for errors:
+```bash
+docker logs localstack-poc -f
+```
+
+### Issue: SAM local can't connect to LocalStack
+
+Update `template.yaml` environment variables to use `host.docker.internal`:
+```yaml
+Environment:
+  Variables:
+    AWS_ENDPOINT_URL: http://host.docker.internal:4566
+    LOCALSTACK_HOSTNAME: host.docker.internal
+```
+
+This allows SAM's Docker container to access LocalStack running on the host machine.
 
 ## Contributing
 
 When making changes:
 
 1. Update TypeScript source files in `src/`
-2. Run `npm run build` to compile
-3. Test locally with LocalStack
-4. Update this README if API changes
+2. Test with standalone server: `npm run dev`
+3. Test with SAM local: `npm run sam:build && npm run sam:start`
+4. Run `npm run build` to compile for deployment
+5. Deploy to LocalStack: `./scripts/deploy-upload.sh` (from project root)
+6. Update this README if API changes
+
+## Development Workflow
+
+**Typical development flow:**
+
+```bash
+# 1. Make code changes in src/
+vim src/app.ts
+
+# 2. Test with standalone server (instant feedback, hot reload)
+npm run dev:watch
+
+# 3. Test specific changes
+curl http://localhost:3000/initiate -X POST ...
+
+# 4. When ready, test with SAM (Lambda simulation)
+npm run sam:build
+npm run sam:start
+
+# 5. Deploy to LocalStack for integration testing
+cd ../../
+./scripts/deploy-upload.sh
+./scripts/test-upload.sh
+```
+
+See **[DEVELOPMENT.md](DEVELOPMENT.md)** for detailed information on:
+- Running in all three modes
+- Debugging techniques
+- Environment variables
+- Performance tips
+- Comparison matrix of deployment modes
+
+## Resources
+
+- **[DEVELOPMENT.md](DEVELOPMENT.md)** - Comprehensive development guide
+- [Fastify Documentation](https://www.fastify.io/)
+- [AWS SAM Documentation](https://docs.aws.amazon.com/serverless-application-model/)
+- [@fastify/aws-lambda](https://github.com/fastify/aws-lambda-fastify)
+- [LocalStack Documentation](https://docs.localstack.cloud/)
+- [AWS SDK for JavaScript v3](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/)
 
 ## License
 
-This is a Proof of Concept project for demonstrating AWS Step Functions callback patterns and file upload architecture.
+This is a Proof of Concept project for demonstrating AWS Lambda file upload patterns with S3 presigned URLs and Fastify framework.
